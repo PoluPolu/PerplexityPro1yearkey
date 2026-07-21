@@ -3,10 +3,10 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import feedparser
-from openai import OpenAI
+from google import genai
 
-# Pobieranie danych z bezpiecznych sekretów GitHub Actions
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+# Pobieranie danych z sekretów GitHub Actions
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
 SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
 RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL")
@@ -26,11 +26,12 @@ def fetch_pepper_deals():
 
 
 def analyze_with_ai(raw_data):
-  """Analizuje zebrane dane za pomocą OpenAI API"""
-  if not OPENAI_API_KEY:
-    raise ValueError("Brak klucza OPENAI_API_KEY w zmiennych środowiskowych!")
+  """Analizuje zebrane dane za pomocą Google Gemini API"""
+  if not GEMINI_API_KEY:
+    raise ValueError("Brak klucza GEMINI_API_KEY w zmiennych środowiskowych!")
 
-  client = OpenAI(api_key=OPENAI_API_KEY)
+  # Inicjalizacja klienta Gemini
+  client = genai.Client(api_key=GEMINI_API_KEY)
 
   prompt = f"""
     Przeanalizuj poniższe wpisy z serwisu okazjonalnego Pepper.pl.
@@ -49,12 +50,13 @@ def analyze_with_ai(raw_data):
     Jeśli nie ma żadnej pasującej oferty, napisz krótko: 'Dzisiaj brak nowych promocji na Perplexity Pro w serwisie Pepper.pl.'
     """
 
-  response = client.chat.completions.create(
-      model="gpt-4o-mini",
-      messages=[{"role": "user", "content": prompt}],
-      temperature=0.3,
+  # Wywołanie modelu Gemini (szybki i darmowy model Flash)
+  response = client.models.generate_content(
+      model="gemini-2.5-flash",
+      contents=prompt,
   )
-  return response.choices[0].message.content
+
+  return response.text
 
 
 def send_email(subject, body):
@@ -78,7 +80,7 @@ if __name__ == "__main__":
   print("1. Pobieranie danych z Pepper RSS...")
   raw_deals = fetch_pepper_deals()
 
-  print("2. Analizowanie przez AI...")
+  print("2. Analizowanie przez Gemini API...")
   summary = analyze_with_ai(raw_deals)
 
   print("3. Wysyłanie e-maila...")
