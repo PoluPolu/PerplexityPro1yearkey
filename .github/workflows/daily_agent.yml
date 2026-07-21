@@ -1,0 +1,33 @@
+name: Perplexity Deals Agent
+
+on:
+  schedule:
+    # Uruchamianie codziennie o 19:00 UTC (21:00 czasu polskiego CEST)
+    - cron: '0 19 * * *'
+  workflow_dispatch: # Umożliwia ręczne uruchomienie przyciskiem w panelu GitHub
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pobranie kodu repozytorium
+        uses: actions/checkout@v4
+
+      - name: Konfiguracja środowiska Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalacja zależności
+        run: |
+          python -m pip install --upgrade pip
+          pip install feedparser openai
+
+      - name: Uruchomienie skryptu agenta
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+        run: python agent.py
