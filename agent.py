@@ -52,7 +52,7 @@ def analyze_with_ai(raw_data):
 
   # Wywołanie modelu Gemini (szybki i darmowy model Flash)
   response = client.models.generate_content(
-      model="gemini-2.5-flash",
+      model="gemini-3.5-flash-lite",
       contents=prompt,
   )
 
