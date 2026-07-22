@@ -22,7 +22,7 @@ jobs:
       - name: Instalacja zależności
         run: |
           python -m pip install --upgrade pip
-          pip install feedparser google-genai
+          pip install feedparser google-genai duckduckgo_search
 
       - name: Uruchomienie skryptu agenta
         env:
