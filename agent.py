@@ -89,22 +89,23 @@ def analyze_with_ai(pepper_data, market_data):
     4. Jeśli na danej platformie nie znaleziono nic pasującego, napisz krótko: "Brak nowych ofert".
     """
 
-  # Models ordered by preference — use currently available names only.
-  # gemini-2.5-flash-lite and gemini-2.0-flash-* are the free-tier options.
+  # Models ordered by preference — only currently supported model IDs.
+  # See: https://ai.google.dev/gemini-api/docs/models
   candidate_models = [
-      "gemini-2.5-flash-lite-preview-06-17",  # newest lightweight model
-      "gemini-2.5-flash",                      # full 2.5-flash (if quota available)
-      "gemini-2.0-flash",                      # fallback
-      "gemini-2.0-flash-lite",                 # smallest fallback
+      "gemini-2.5-flash-lite",       # lightest 2.5 model, lowest quota usage
+      "gemini-2.5-flash",            # full 2.5-flash
+      "gemini-2.0-flash",            # 2.0 fallback
+      "gemini-2.0-flash-lite",       # smallest 2.0 fallback
   ]
 
   import re
 
   def _parse_retry_delay(err_msg: str, fallback: int) -> int:
     """Extract the suggested retry delay (seconds) from a 429 error message."""
+    # The API returns retryDelay as e.g. '49s' inside the JSON error body
     match = re.search(r"retryDelay['\"]:\s*['\"](\d+)s", err_msg)
     if match:
-      return int(match.group(1)) + 2  # add a small buffer
+      return int(match.group(1)) + 5  # honour API hint + small buffer
     return fallback
 
   last_exception = None
@@ -124,17 +125,27 @@ def analyze_with_ai(pepper_data, market_data):
         err_msg = str(e)
         print(f"Błąd dla modelu {model_name}: {err_msg}")
         if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-          # Honor the API's suggested retry delay when available
-          wait_time = _parse_retry_delay(err_msg, fallback=attempt * 15)
+          # Always honour the full delay the API tells us to wait
+          wait_time = _parse_retry_delay(err_msg, fallback=60 * attempt)
           print(f"Przekroczono limit/rate limit. Czekam {wait_time} s przed kolejną próbą...")
           time.sleep(wait_time)
         else:
-          # For 404 / unknown model errors, skip immediately to next model
+          # 404 / NOT_FOUND — model unavailable, skip to next immediately
+          print(f"Model {model_name} niedostępny, przechodzę do następnego...")
           break
 
-  raise RuntimeError(
-      f"Nie udało się wygenerować raportu przez Gemini API po przetestowaniu wszystkich modeli. Ostatni błąd: {last_exception}"
-  )
+  print(f"Ostrzeżenie: Nie udało się wygenerować raportu przez Gemini API po przetestowaniu wszystkich modeli. Ostatni błąd: {last_exception}")
+  print("Generowanie raportu awaryjnego (bez analizy AI)...")
+  return f"""[RAPORT AWARYJNY - Brak dostępu do Gemini API / przekroczony limit]
+
+Ze względu na ograniczenia API Gemini, poniżej przesyłamy surowe zebrane dane bez podsumowania AI.
+
+--- DANE Z PEPPER.PL ---
+{pepper_data}
+
+--- DANE Z ALLEGRO, CENEO, G2A, G2G ---
+{market_data}
+"""
 
 
 def send_email(subject, body):
