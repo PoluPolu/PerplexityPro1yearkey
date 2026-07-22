@@ -89,13 +89,23 @@ def analyze_with_ai(pepper_data, market_data):
     4. Jeśli na danej platformie nie znaleziono nic pasującego, napisz krótko: "Brak nowych ofert".
     """
 
+  # Models ordered by preference — use currently available names only.
+  # gemini-2.5-flash-lite and gemini-2.0-flash-* are the free-tier options.
   candidate_models = [
-      "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
-      "gemini-2.0-flash-lite",
-      "gemini-1.5-pro",
+      "gemini-2.5-flash-lite-preview-06-17",  # newest lightweight model
+      "gemini-2.5-flash",                      # full 2.5-flash (if quota available)
+      "gemini-2.0-flash",                      # fallback
+      "gemini-2.0-flash-lite",                 # smallest fallback
   ]
+
+  import re
+
+  def _parse_retry_delay(err_msg: str, fallback: int) -> int:
+    """Extract the suggested retry delay (seconds) from a 429 error message."""
+    match = re.search(r"retryDelay['\"]:\s*['\"](\d+)s", err_msg)
+    if match:
+      return int(match.group(1)) + 2  # add a small buffer
+    return fallback
 
   last_exception = None
   for model_name in candidate_models:
@@ -114,11 +124,12 @@ def analyze_with_ai(pepper_data, market_data):
         err_msg = str(e)
         print(f"Błąd dla modelu {model_name}: {err_msg}")
         if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-          wait_time = attempt * 5
+          # Honor the API's suggested retry delay when available
+          wait_time = _parse_retry_delay(err_msg, fallback=attempt * 15)
           print(f"Przekroczono limit/rate limit. Czekam {wait_time} s przed kolejną próbą...")
           time.sleep(wait_time)
         else:
-          # Dla innych błędów (np. nieznany model), przejdź do następnego modelu
+          # For 404 / unknown model errors, skip immediately to next model
           break
 
   raise RuntimeError(
