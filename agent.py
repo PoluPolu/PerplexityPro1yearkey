@@ -1,8 +1,12 @@
 import os
 import smtplib
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from duckduckgo_search import DDGS
+try:
+    from ddgs import DDGS
+except ImportError:
+    from duckduckgo_search import DDGS
 import feedparser
 from google import genai
 
@@ -85,13 +89,41 @@ def analyze_with_ai(pepper_data, market_data):
     4. Jeśli na danej platformie nie znaleziono nic pasującego, napisz krótko: "Brak nowych ofert".
     """
 
-  # Użyj nazwy modelu, która działa w Twoim panelu (np. gemini-2.0-flash lub gemini-1.5-flash)
-  response = client.models.generate_content(
-      model="gemini-2.0-flash",
-      contents=prompt,
-  )
+  candidate_models = [
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-2.0-flash-lite",
+      "gemini-1.5-pro",
+  ]
 
-  return response.text
+  last_exception = None
+  for model_name in candidate_models:
+    for attempt in range(1, 4):
+      try:
+        print(f"Próba generowania raportu za pomocą modelu: {model_name} (próba {attempt})...")
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+        )
+        if response and response.text:
+          print(f"Sukces z użyciem modelu {model_name}!")
+          return response.text
+      except Exception as e:
+        last_exception = e
+        err_msg = str(e)
+        print(f"Błąd dla modelu {model_name}: {err_msg}")
+        if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+          wait_time = attempt * 5
+          print(f"Przekroczono limit/rate limit. Czekam {wait_time} s przed kolejną próbą...")
+          time.sleep(wait_time)
+        else:
+          # Dla innych błędów (np. nieznany model), przejdź do następnego modelu
+          break
+
+  raise RuntimeError(
+      f"Nie udało się wygenerować raportu przez Gemini API po przetestowaniu wszystkich modeli. Ostatni błąd: {last_exception}"
+  )
 
 
 def send_email(subject, body):
